@@ -231,7 +231,7 @@ def yield_zips(
 ):
     def yield_abort_if(graph, node):
         size, desc = size_descendants(graph, node)
-        to_yield = size < max_zip_bytes
+        to_yield = desc > 0 and size < max_zip_bytes
         to_abort = to_yield or (desc / (size / 1024 ** 4)) < max_files_per_TiB
         return to_yield, to_abort
 
@@ -246,13 +246,13 @@ def yield_zips(
         yield node
 
     logger.info(
-        "%s file(s) will be zipped into %s archive(s)",
+        "%s inode(s) will be zipped into %s archive(s)",
         archived_inode_count,
         archive_count,
     )
     final_per_TiB = (
         g.graph["total_descendants"] - archived_inode_count + archive_count
-    ) / g.graph["total_size"]
+    ) / (g.graph["total_size"] / 1024**4)
     logger.info(
         "Assuming zero compression, total set comprises <=%s inode(s) per TiB",
         math.ceil(final_per_TiB),
