@@ -231,8 +231,18 @@ def yield_zips(
 ):
     def yield_abort_if(graph, node):
         size, desc = size_descendants(graph, node)
-        to_yield = desc > 0 and size < max_zip_bytes
-        to_abort = to_yield or (desc / (size / 1024 ** 4)) < max_files_per_TiB
+        if desc == 0:
+            # file or empty dir
+            return False, True
+        to_yield = size < max_zip_bytes
+        if to_yield:
+            to_abort = True
+        else:
+            size_TiB = size / 1024 ** 4
+            to_abort = (
+                size_TiB <= sys.float_info.epsilon
+                or (desc / size_TiB < max_files_per_TiB)
+            )
         return to_yield, to_abort
 
     archived_inode_count = 0
