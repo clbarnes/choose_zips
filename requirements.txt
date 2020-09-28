@@ -1,0 +1,8 @@
+networkx
+tqdm
+
+mypy
+flake8
+black
+ipython
+ipdb
