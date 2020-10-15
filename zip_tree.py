@@ -7,7 +7,7 @@ import os
 from contextlib import contextmanager
 import sys
 from argparse import ArgumentParser
-from typing import Optional, Callable, Hashable, Tuple
+from typing import Optional, Callable, Hashable, Tuple, Iterable
 import re
 
 from tqdm import tqdm
@@ -22,9 +22,6 @@ DEFAULT_LIMIT_PER_TIB = 100_000
 SEP = "\t"
 
 ROOT = Path(".")
-LENGTH = 72629
-
-TOTAL = 0
 
 
 def ieee_size(b, decimals=2):
@@ -61,7 +58,7 @@ def sizes_to_graph(fpath, total=True, progress=True):
             f, total=total, desc="adding files to tree", disable=not progress
         ):
             *path_str_items, size_str = line.strip().split(SEP)
-            path_str = "\t".join(path_str_items)
+            path_str = SEP.join(path_str_items)
             size = int(size_str)
             path = Path(path_str)
             g.add_node(path, size=size, descendants=0)
@@ -231,19 +228,35 @@ def yield_zips(
 ):
     def yield_abort_if(graph, node):
         size, desc = size_descendants(graph, node)
-        if desc == 0:
+        if desc <= 1:
             # file or empty dir
             return False, True
-        to_yield = size < max_zip_bytes
-        if to_yield:
-            to_abort = True
-        else:
-            size_TiB = size / 1024 ** 4
-            to_abort = (
-                size_TiB <= sys.float_info.epsilon
-                or (desc / size_TiB < max_files_per_TiB)
-            )
-        return to_yield, to_abort
+
+        size_TiB = size / 1024 ** 4
+        if size_TiB <= sys.float_info.epsilon:
+            # file size
+            return True, True
+
+        if desc / size_TiB < max_files_per_TiB:
+            # or inodes/TiB is below threshold
+            return False, True
+
+        if size < max_zip_bytes:
+            # directory is too big to zip
+            return True, True
+
+        return False, False
+
+        # to_yield = size < max_zip_bytes
+        # if to_yield:
+        #     to_abort = True
+        # else:
+        #     size_TiB = size / 1024 ** 4
+        #     to_abort = (
+        #         size_TiB <= sys.float_info.epsilon
+        #         or (desc / size_TiB < max_files_per_TiB)
+        #     )
+        # return to_yield, to_abort
 
     archived_inode_count = 0
     archive_count = 0
@@ -269,8 +282,43 @@ def yield_zips(
     )
 
 
+def yield_nozips(g: nx.DiGraph, to_skip: Iterable, progress=True):
+    """Note: mutates g, although structure should remain the same"""
+    removed_edges = []
+    for node in to_skip:
+        for pred in g.predecessors(node):
+            removed_edges.append((pred, node))
+            g.remove_edge(pred, node)
+
+    def yield_abort_if(graph, node):
+        descendants = node_descendants(graph, node)
+        return descendants == 0, False
+
+    count = 0
+    size = 0
+    for node in dfs(g, ROOT, yield_abort_if, progress):
+        count += 1
+        d = g.nodes[node]
+        size += d["size"]
+        yield node
+
+    logger.info("%s unzipped files total %s", count, ieee_size(size))
+
+    g.add_edges_from(removed_edges)
+
+
 def make_parser():
-    parser = ArgumentParser()
+    parser = ArgumentParser(
+        description=(
+            "Traverse a file hierarchy implied by a given file listing with sizes, "
+            "to determine which subtrees need to be zipped up "
+            "in order for the hierarchy to have inodes/TiB lower than --limit-per-TiB "
+            "and no zip to contain files of total size greater than --max-zip-size. "
+            "If --zips is given, print the list of directories to be zipped. "
+            "If --nozips is given, print the list of files not to be zipped. "
+            "Otherwise, do nothing."
+        )
+    )
     parser.add_argument(
         "input",
         nargs="?",
@@ -278,7 +326,10 @@ def make_parser():
         "with lines of format `{filename}\\t{n_bytes}`",
     )
     parser.add_argument(
-        "output", nargs="?", help="output file (empty or - to use stdout)"
+        "--zips", help="output file for list of directories to zip (- to use stdout)"
+    )
+    parser.add_argument(
+        "--nozips", help="output file for list of files not to zip (- to use stdout)"
     )
     parser.add_argument(
         "-t",
@@ -321,12 +372,25 @@ def parse_args(args=None):
     return parser.parse_args(args)
 
 
+def fpath_iter_to_file(fpath, it: Iterable[Path], sep="\n"):
+    with ensure_file(fpath, "w") as f:
+        for fp in it:
+            f.write(f"{os.fspath(fp)}{sep}")
+
+
 def main(args=None):
     args = parse_args(args)
+    if not (args.zips or args.nozips):
+        print("No --zips or --nozips given; nothing to do", file=sys.stderr)
+        sys.exit(0)
     g = sizes_to_graph(args.input, args.total, not args.no_progress)
-    with ensure_file(args.output, "w") as f:
-        for fpath in yield_zips(g, progress=not args.no_progress):
-            f.write(f"{os.fspath(fpath)}\n")
+    zips = list(yield_zips(g, progress= not args.no_progress))
+    if args.zips:
+        fpath_iter_to_file(args.zips, zips)
+    if args.nozips:
+        fpath_iter_to_file(
+            args.nozips, yield_nozips(g, zips, progress= not args.no_progress)
+        )
 
 
 if __name__ == "__main__":
