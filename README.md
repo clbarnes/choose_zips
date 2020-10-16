@@ -1,4 +1,4 @@
-# zip_tree
+# choose_zip
 
 Python script for determining which directories to zip up to make total files per TiB come under a particular threshold.
 Requires `tqdm` and `networkx`.
@@ -21,7 +21,7 @@ so that they can be ignored in your first dump, and then zipped and sync separat
 ## Usage
 
 ```_help
-usage: zip_tree.py [-h] [-t [TOTAL]] [-z MAX_ZIP_SIZE] [-l LIMIT_PER_TIB] [-P]
+usage: choose_zip.py [-h] [-t [TOTAL]] [-z MAX_ZIP_SIZE] [-l LIMIT_PER_TIB] [-P]
                    [input] [output]
 
 positional arguments:
