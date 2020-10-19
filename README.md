@@ -1,4 +1,28 @@
-# choose_zip
+# Large backup tools
+
+Tools involved in copying large amounts of data (~500TB) to an LTFS-backed remote store.
+
+Constraints
+
+- No more than 100,000 inodes / TiB
+- rsync
+- Network dropouts are likely
+- Reading metadata on the remote is OK, but random-reading file contents is very slow
+
+Strategy
+
+- Get list of files on ark with their sizes `find . -type f -printf "%s\t%P\n" > list_of_files.tsv`
+- Get list of directories to zip up, and files to not zip up, in order to get under 100k inodes/TiB limit
+  - See `choose_zips.py`
+  - `./choose_zips.py ../list_of_files.tsv --zip ../to_zip.txt --nozip ../not_to_zip.txt --total`
+- Use [fpart](https://github.com/martymac/fpart) to split `not_to_zip.txt` into 100GB rsync jobs
+  - Don't use fpsync directly, to handle drops
+  - ? `fpart -s 100000000000 -i $SIZES_DIR/not_to_zip.txt -o $SIZES_DIR/parts/part`, in top `ark:/data/fs1` directory
+- Script rsyncing those parts a few at a time
+  - See `rsync_all.py`
+- Zip up every `to_zip.txt` directory and put in place on remote
+
+## choose_zip
 
 Python script for determining which directories to zip up to make total files per TiB come under a particular threshold.
 Requires `tqdm` and `networkx`.
@@ -18,7 +42,7 @@ Motivation: some backup targets perform poorly or restrict dumps with lots of sm
 This script allows you to list directories which are good candidates for zipping up,
 so that they can be ignored in your first dump, and then zipped and sync separately.
 
-## Usage
+### Usage
 
 ```_help
 usage: choose_zip.py [-h] [-t [TOTAL]] [-z MAX_ZIP_SIZE] [-l LIMIT_PER_TIB] [-P]

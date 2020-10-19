@@ -275,7 +275,7 @@ def yield_zips(
     )
     final_per_TiB = (
         g.graph["total_descendants"] - archived_inode_count + archive_count
-    ) / (g.graph["total_size"] / 1024**4)
+    ) / (g.graph["total_size"] / 1024 ** 4)
     logger.info(
         "Assuming zero compression, total set comprises <=%s inode(s) per TiB",
         math.ceil(final_per_TiB),
@@ -384,12 +384,12 @@ def main(args=None):
         print("No --zips or --nozips given; nothing to do", file=sys.stderr)
         sys.exit(0)
     g = sizes_to_graph(args.input, args.total, not args.no_progress)
-    zips = list(yield_zips(g, progress= not args.no_progress))
+    zips = list(yield_zips(g, progress=not args.no_progress))
     if args.zips:
         fpath_iter_to_file(args.zips, zips)
     if args.nozips:
         fpath_iter_to_file(
-            args.nozips, yield_nozips(g, zips, progress= not args.no_progress)
+            args.nozips, yield_nozips(g, zips, progress=not args.no_progress)
         )
 
 
