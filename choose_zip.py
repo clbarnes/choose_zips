@@ -56,7 +56,10 @@ def count_lines(path):
 
 
 def is_path(obj):
-    return isinstance(obj, os.PathLike) or (isinstance(obj, str) and obj != "-")
+    try:
+        return os.fspath(obj) != "-"
+    except TypeError:
+        return False
 
 
 def sizes_to_graph(fpath, total=True, progress=True):
@@ -155,7 +158,7 @@ def ensure_file(obj, mode="r"):
             raise ValueError("unknown mode: " + mode)
 
     else:
-        if isinstance(obj, (str, os.PathLike)):
+        if is_path(obj):
             with open(obj, mode) as f:
                 yield f
         else:
@@ -179,7 +182,8 @@ def interpret_bytes(s):
     groups = result.groupdict()
     num = float(groups["n"] or 0)
     mult_by = 1
-    if prefix := groups["prefix"]:
+    prefix = groups["prefix"]
+    if prefix:
         powers = {
             "": 0,
             "k": 1,
@@ -196,9 +200,8 @@ def interpret_bytes(s):
             mult_by *= 1024 ** powers[prefix[:-1]]
         else:
             mult_by *= 1000 ** powers[prefix]
-    if b := groups["unit"]:
-        if b == "b":
-            mult_by /= 8
+    if groups["unit"] == "b":
+        mult_by /= 8
     return int(num * mult_by)
 
 
