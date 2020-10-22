@@ -11,7 +11,7 @@ Constraints
 
 Strategy
 
-- Get list of files on ark with their sizes `find . -type f -printf "%s\t%P\n" > list_of_files.tsv`
+- Get list of files on ark with their sizes `sudo find . -type f -printf "%s\t%P\n" > list_of_files.tsv`
 - Get list of directories to zip up, and files to not zip up, in order to get under 100k inodes/TiB limit
   - See `choose_zips.py`
   - `./choose_zips.py ../list_of_files.tsv --zip ../to_zip.txt --nozip ../not_to_zip.txt --total`
@@ -69,3 +69,6 @@ optional arguments:
                         this will not be descended into, default 100000
   -P, --no-progress     Do not show progress bars
 ```
+
+## rsync_all
+

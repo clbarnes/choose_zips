@@ -9,6 +9,7 @@ import sys
 from argparse import ArgumentParser
 from typing import Optional, Callable, Hashable, Tuple, Iterable
 import re
+import datetime as dt
 
 from tqdm import tqdm
 import networkx as nx
@@ -32,6 +33,20 @@ def ieee_size(b, decimals=2):
         unit = units.pop(0)
         b /= k
     return f"{b:.{decimals}f}{unit}B"
+
+
+# ROW_RE = re.compile(r"(\d+)\s+(.+)")
+
+
+# def parse_row(row: str):
+#     match = ROW_RE.fullmatch(row.strip())
+#     if match is None:
+#         raise ValueError(
+#             "Row (ignoring outer single quotes) did not match regex "
+#             f"'{ROW_RE.pattern}'\n\t'{row}'"
+#         )
+#     size_str, path_str = match.groups()
+#     return int(size_str), Path(path_str)
 
 
 def count_lines(path):
@@ -201,7 +216,7 @@ def dfs(
         yield_abort_if = lambda _x, _y: (True, False)  # noqa
 
     with tqdm(
-        desc="calculating zip dirs",
+        desc="navigating tree",
         total=node_descendants(g, node) + 1,
         disable=not progress,
     ) as pbar:
@@ -379,6 +394,8 @@ def fpath_iter_to_file(fpath, it: Iterable[Path], sep="\n"):
 
 
 def main(args=None):
+    started = dt.datetime.now()
+    logger.info("Started at %s", started.isoformat())
     args = parse_args(args)
     if not (args.zips or args.nozips):
         print("No --zips or --nozips given; nothing to do", file=sys.stderr)
@@ -391,6 +408,9 @@ def main(args=None):
         fpath_iter_to_file(
             args.nozips, yield_nozips(g, zips, progress=not args.no_progress)
         )
+    finished = dt.datetime.now()
+    logger.info("Finished at %s", finished.isoformat())
+    logger.info("Took %s", finished - started)
 
 
 if __name__ == "__main__":
