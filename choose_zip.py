@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import math
-from pathlib import Path
 import logging
 import subprocess as sp
 import os
@@ -19,9 +18,10 @@ logging.basicConfig(level=logging.INFO)
 
 DEFAULT_MAX_ZIP_SIZE = 100 * 1024 ** 3  # 100GiB
 DEFAULT_LIMIT_PER_TIB = 100_000
-SEP = "\t"
 
-ROOT = Path(".")
+SEP = b"\t"
+
+ROOT = b"."
 
 
 def ieee_size(b, decimals=2):
@@ -58,9 +58,19 @@ def count_lines(path):
 
 def is_path(obj):
     try:
-        return os.fspath(obj) != "-"
+        return os.fspath(obj) not in ("-", b"-")
     except TypeError:
         return False
+
+
+def path_parents(path_str):
+    parts = list(os.path.split(path_str))
+    last = parts.pop()
+    while parts:
+        yield os.path.join(*parts)
+        last = parts.pop()
+    if last != ROOT:
+        yield ROOT
 
 
 def sizes_to_graph(fpath, total=True, progress=True):
@@ -72,20 +82,19 @@ def sizes_to_graph(fpath, total=True, progress=True):
     total_size = 0
     total_descendants = 0
 
-    with ensure_file(fpath, "r") as f:
+    with ensure_file(fpath, "rb") as f:
         for line in tqdm(
             f, total=total, desc="adding files to tree", disable=not progress
         ):
-            *path_str_items, size_str = line.strip().split(SEP)
-            path_str = SEP.join(path_str_items)
-            size = int(size_str)
-            path = Path(path_str)
+            *path_b_items, size_b = line.strip().split(SEP)
+            path = SEP.join(path_b_items)
+            size = int(size_b)
             g.add_node(path, size=size, descendants=0)
             total_size += size
             total_descendants += 1
 
             child = path
-            for parent in path.parents:
+            for parent in path_parents(path):
                 parent_in_g = parent in g
 
                 # calculate size and descendants up front: probably slower
@@ -142,9 +151,21 @@ def node_descendants(g: nx.DiGraph, node):
     return size_descendants(g, node)[1]
 
 
+DEFAULT_MODE = "rb"
+
+
 @contextmanager
-def ensure_file(obj, mode="r"):
-    mode = mode or "r"
+def ensure_file(
+    obj,
+    mode=DEFAULT_MODE,
+    buffering=-1,
+    encoding=None,
+    errors=None,
+    newline=None,
+    closefd=True,
+    opener=None,
+):
+    mode = mode or DEFAULT_MODE
     should_write = mode[0] in "wa" or "+" in mode
     should_read = mode[0] == "r"
 
@@ -152,15 +173,17 @@ def ensure_file(obj, mode="r"):
         if should_read:
             if should_write:
                 raise ValueError("stdin/stdout cannot be both written and read")
-            yield sys.stdin
+            yield sys.stdin.buffer if "b" in mode else sys.stdin
         elif should_write:
-            yield sys.stdout
+            yield sys.stdout.buffer if "b" in mode else sys.stdout
         else:
             raise ValueError("unknown mode: " + mode)
 
     else:
         if is_path(obj):
-            with open(obj, mode) as f:
+            with open(
+                obj, mode, buffering, encoding, errors, newline, closefd, opener
+            ) as f:
                 yield f
         else:
             if (
@@ -391,10 +414,10 @@ def parse_args(args=None):
     return parser.parse_args(args)
 
 
-def fpath_iter_to_file(fpath, it: Iterable[Path], sep="\n"):
-    with ensure_file(fpath, "w") as f:
+def fpath_iter_to_file(fpath, it: Iterable[bytes], sep=b"\n"):
+    with ensure_file(fpath, "wb") as f:
         for fp in it:
-            f.write(f"{os.fspath(fp)}{sep}")
+            f.write(fp + sep)
 
 
 def main(args=None):
