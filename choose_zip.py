@@ -64,13 +64,12 @@ def is_path(obj):
 
 
 def path_parents(path_str):
-    parts = list(os.path.split(path_str))
-    last = parts.pop()
-    while parts:
-        yield os.path.join(*parts)
-        last = parts.pop()
-    if last != ROOT:
-        yield ROOT
+    while True:
+        path_str = os.path.dirname(path_str)
+        if path_str:
+            yield path_str
+        else:
+            break
 
 
 def sizes_to_graph(fpath, total=True, progress=True):
@@ -88,6 +87,9 @@ def sizes_to_graph(fpath, total=True, progress=True):
         ):
             *path_b_items, size_b = line.strip().split(SEP)
             path = SEP.join(path_b_items)
+            prefix = ROOT + os.sep.encode()
+            if not path.startswith(prefix):
+                path = os.path.join(ROOT, path)
             size = int(size_b)
             g.add_node(path, size=size, descendants=0)
             total_size += size
@@ -442,9 +444,3 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
-    # for s, b in [
-    #     ("10", 10),
-    #     ("10kB", 10 * 1000),
-    #     ("10KiB", 10 * 1024),
-    # ]:
-    #     assert interpret_bytes(s) == b
