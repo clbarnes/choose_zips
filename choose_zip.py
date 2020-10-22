@@ -19,7 +19,6 @@ logging.basicConfig(level=logging.INFO)
 
 DEFAULT_MAX_ZIP_SIZE = 100 * 1024 ** 3  # 100GiB
 DEFAULT_LIMIT_PER_TIB = 100_000
-
 SEP = "\t"
 
 ROOT = Path(".")
@@ -51,7 +50,9 @@ def ieee_size(b, decimals=2):
 
 def count_lines(path):
     logger.info("Counting lines in %s", path)
-    result = sp.run(["wc", "-l", os.fspath(path)], capture_output=True, check=True)
+    result = sp.run(
+        ["wc", "-l", os.fspath(path)], stdin=sp.PIPE, stdout=sp.PIPE, check=True
+    )
     return int(result.stdout.split()[0])
 
 
