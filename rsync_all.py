@@ -57,6 +57,7 @@ class RsyncRunner:
                 f"Rsync failed for command '{rsync_str}'\n"
                 f"{textwrap.indent(result.stderr, tab)}"
             )
+        return result.check_returncode()
 
 
 def rsync_all(parts_dir: Path, runner: RsyncRunner, parallel=DEFAULT_PARALLEL):
@@ -150,7 +151,7 @@ def main():
         parsed.source, parsed.target, opts=opts, passfile=parsed.passfile
     )
 
-    rsync_all(parsed.parts, runner, parsed.jobs)
+    return rsync_all(parsed.parts, runner, parsed.jobs)
 
 
 if __name__ == "__main__":
