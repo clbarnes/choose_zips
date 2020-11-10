@@ -48,6 +48,7 @@ class RsyncRunner:
             source=self.source,
             target=self.target,
         )
+        logger.info("Rsyncing %s", files_from)
         result = sp.run(
             shlex.split(rsync_str), stdout=sp.PIPE, stderr=sp.PIPE, encoding="utf-8"
         )
@@ -66,6 +67,7 @@ class RsyncRunner:
                 f"Rsync failed for command '{rsync_str}'\n"
                 f"{textwrap.indent(result.stderr, tab)}"
             )
+        logger.info("Finished rsyncing %s", files_from)
         return result.check_returncode()
 
 
