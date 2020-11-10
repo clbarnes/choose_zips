@@ -48,8 +48,8 @@ class RsyncRunner:
         result = sp.run(shlex.split(rsync_str), stderr=sp.PIPE)
         success = result.returncode == 0
         if not success:
-            lines = [line.strip() for line in result.stderr.split("\n") if line]
-            if len(lines) == 2 and "rsync: failed to set times" in lines[0]:
+            lines = [line.strip() for line in result.stderr.split(b"\n") if line]
+            if len(lines) == 2 and b"rsync: failed to set times" in lines[0]:
                 success = True
 
         if success:
