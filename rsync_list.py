@@ -142,7 +142,7 @@ def main():
         parsed.source, parsed.target, opts=opts, passfile=parsed.passfile
     )
 
-    return rsync_list(parsed.parts, runner, parsed.jobs)
+    return rsync_list(parsed.parts, runner)
 
 
 if __name__ == "__main__":
