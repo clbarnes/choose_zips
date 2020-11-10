@@ -17,7 +17,14 @@ DEFAULT_PARALLEL = 5
 
 
 class RsyncRunner:
-    DEFAULT_OPTS = '--archive --quiet --whole-file --size-only --inplace --rsh "ssh -T -x -o Compression=no -c aes128-gcm@openssh.com"'
+    DEFAULT_OPTS = (
+        "--archive "
+        "--quiet "
+        "--whole-file "
+        "--size-only "
+        "--inplace "
+        '--rsh "ssh -T -x -o Compression=no -c aes128-gcm@openssh.com"'
+    )
     DEFAULT_TEMPLATE = (
         'rsync {opts} --files-from="{files_from}" "{source}/" "{target}/"'
     )
@@ -26,7 +33,7 @@ class RsyncRunner:
         self.source = Path(source)
         self.target = Path(target)
         self.rsync_template = (
-            self.DEFAULT_TEMPLATE if rsync_template else rsync_template
+            self.DEFAULT_TEMPLATE if rsync_template is None else rsync_template
         )
         if passfile is not None:
             self.rsync_template = "sshpass -f {} {}".format(
@@ -41,7 +48,9 @@ class RsyncRunner:
             source=self.source,
             target=self.target,
         )
-        result = sp.run(shlex.split(rsync_str), capture_output=True, text=True)
+        result = sp.run(
+            shlex.split(rsync_str), stdout=sp.PIPE, stderr=sp.PIPE, encoding="utf-8"
+        )
         success = result.returncode == 0
         if not success:
             lines = [line.strip() for line in result.stderr.split("\n") if line]
@@ -88,7 +97,7 @@ def rsync_all(parts_dir: Path, runner: RsyncRunner, parallel=DEFAULT_PARALLEL):
 
 
 def bin_exists(bin_name):
-    result = sp.run(["which", bin_name])
+    result = sp.run(["which", bin_name], stdout=sp.PIPE)
     return result.returncode == 0
 
 
