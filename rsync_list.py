@@ -6,19 +6,16 @@ import os
 import logging
 import textwrap
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PARALLEL = 5
-
 
 class RsyncRunner:
     DEFAULT_OPTS = (
         "--archive "
-        "--quiet "
+        "--info=progress2 "
         "--whole-file "
         "--size-only "
         "--inplace "
@@ -48,9 +45,7 @@ class RsyncRunner:
             target=self.target,
         )
         logger.info("Rsyncing %s", files_from)
-        result = sp.run(
-            shlex.split(rsync_str), stdout=sp.PIPE, stderr=sp.PIPE, encoding="utf-8"
-        )
+        result = sp.run(shlex.split(rsync_str), stderr=sp.PIPE)
         success = result.returncode == 0
         if not success:
             lines = [line.strip() for line in result.stderr.split("\n") if line]
@@ -70,22 +65,15 @@ class RsyncRunner:
         return result.check_returncode()
 
 
-def rsync_all(parts_dir: Path, runner: RsyncRunner, parallel=DEFAULT_PARALLEL):
+def rsync_list(parts_dir: Path, runner: RsyncRunner):
     parts_dir = Path(parts_dir)
     failures = []
     files = sorted(p for p in parts_dir.iterdir() if not p.is_dir())
-    with ThreadPoolExecutor(parallel) as exe:
-        futs = {
-            exe.submit(runner, fpath): fpath
-            for fpath in tqdm(files, desc="Queuing jobs")
-        }
-
-        for fut in tqdm(as_completed(futs), desc="Completing jobs", total=len(futs)):
-            ffrom = futs[fut]
-            try:
-                fut.result()
-            except sp.CalledProcessError:
-                failures.append(ffrom)
+    for fpath in tqdm(files):
+        try:
+            runner(fpath)
+        except sp.CalledProcessError:
+            failures.append(fpath)
 
     if failures:
         logger.warning(
@@ -112,13 +100,6 @@ def parse_args(args=None):
     )
     parser.add_argument(
         "target", type=Path, help="Target directory to copy listed files into"
-    )
-    parser.add_argument(
-        "--jobs",
-        "-j",
-        type=int,
-        default=DEFAULT_PARALLEL,
-        help=f"Number of jobs to run in parallel (default {DEFAULT_PARALLEL})",
     )
     parser.add_argument("--options", "-o", help="rsync options to use")
     parser.add_argument(
@@ -161,7 +142,7 @@ def main():
         parsed.source, parsed.target, opts=opts, passfile=parsed.passfile
     )
 
-    return rsync_all(parsed.parts, runner, parsed.jobs)
+    return rsync_list(parsed.parts, runner, parsed.jobs)
 
 
 if __name__ == "__main__":
