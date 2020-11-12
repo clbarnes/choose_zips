@@ -16,6 +16,7 @@ class RsyncRunner:
     DEFAULT_OPTS = (
         "--archive "
         "--info=progress2 "
+        "--human-readable "
         "--whole-file "
         "--size-only "
         "--inplace "
@@ -47,20 +48,21 @@ class RsyncRunner:
         logger.info("Rsyncing %s", files_from)
         result = sp.run(shlex.split(rsync_str), stderr=sp.PIPE)
         success = result.returncode == 0
+        stderr = result.stderr.decode("utf-8", errors="replace")
         if not success:
-            lines = [line.strip() for line in result.stderr.split(b"\n") if line]
-            if len(lines) == 2 and b"rsync: failed to set times" in lines[0]:
+            lines = [line.strip() for line in stderr.split("\n") if line]
+            if len(lines) == 2 and "rsync: failed to set times" in lines[0]:
                 success = True
+            else:
+                tab = "\t"
+                logger.warning(
+                    f"Rsync failed for command '{rsync_str}'\n"
+                    f"{textwrap.indent(stderr, tab)}"
+                )
 
-        if success:
-            if not keep_file:
-                os.remove(files_from)
-        else:
-            tab = "\t"
-            logger.warning(
-                f"Rsync failed for command '{rsync_str}'\n"
-                f"{textwrap.indent(result.stderr, tab)}"
-            )
+        if success and not keep_file:
+            os.remove(files_from)
+
         logger.info("Finished rsyncing %s", files_from)
         return result.check_returncode()
 
