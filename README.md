@@ -21,6 +21,8 @@ Strategy
 - Script rsyncing those parts a few at a time
   - See `rsync_all.py`
 - Zip up every `to_zip.txt` directory and put in place on remote
+  - See `zip_all.py`
+    - N.B. This is extremely slow.
 
 ## choose_zip
 
