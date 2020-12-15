@@ -56,8 +56,9 @@ class RsyncRunner:
             else:
                 tab = "\t"
                 logger.warning(
-                    f"Rsync failed for command '{rsync_str}'\n"
-                    f"{textwrap.indent(stderr, tab)}"
+                    f"Rsync failed for command '%s'\n%s",
+                    rsync_str,
+                    textwrap.indent(stderr, tab)
                 )
 
         if success and not keep_file:
