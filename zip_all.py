@@ -21,24 +21,30 @@ except ImportError:
 
 
 logger = logging.getLogger(__name__)
+PART_SUFFIX = ".PART"
 
 
 def parse_args(args=None):
     parser = ArgumentParser()
     parser.add_argument(
-        "--count",
-        "-c",
+        "--no-count",
+        "-C",
         action="store_true",
-        help="Whether to count all the jobs before queuing them, for progress "
-        "information on the queuing",
+        help="Whether to skip counting all the jobs before queuing them",
     )
-    parser.add_argument(
-        "--outfile", "-o", type=Path, default=Path("-"), help="Print failures to this file (default '-' for stdout)"
-    )
+    # parser.add_argument(
+    #     "--outfile",
+    #     "-o",
+    #     type=Path,
+    #     default=Path("-"),
+    #     help="Print failures to this file (default '-' for stdout)",
+    # )
     parser.add_argument(
         "--jobs", "-j", type=int, default=1, help="How many threads to run"
     )
-    parser.add_argument("--dry-run", "-d", action="store_true", help="don't actually do anything")
+    parser.add_argument(
+        "--dry-run", "-d", action="store_true", help="don't actually do anything"
+    )
     parser.add_argument(
         "src_dir",
         nargs="?",
@@ -104,30 +110,58 @@ class ZipProcessor:
         self.src_dir = src_dir
         self.tgt_dir = tgt_dir
 
-    def __call__(self, rel_path: Path):
-        src = self.src_dir / rel_path
-        tgt = self.tgt_dir / rel_path.with_suffix(".zip")
+    def __call__(self, rel_path: Path, dry_run=False):
+        src = (self.src_dir / rel_path).resolve()
+        tgt = (self.tgt_dir / rel_path.parent / (rel_path.name + ".tar.lz4")).resolve()
+        if tgt.is_file():
+            logger.debug("Target exists, skipping: %s", tgt)
+            return rel_path, sp.CompletedProcess([], 0)
+        intermediate = tgt.parent / (tgt.name + PART_SUFFIX)
+
+        if dry_run:
+            if intermediate.is_file():
+                logger.debug(
+                    "DRY RUN: Intermediate exists, would delete: %s", intermediate
+                )
+        else:
+            try:
+                intermediate.unlink()
+            except FileNotFoundError:
+                pass
+
         tgt.parent.mkdir(exist_ok=True, parents=True)
+        tgt_str = os.fspath(tgt)
+        inter_str = os.fspath(intermediate)
         cmd = (
-            f"cd {os.fspath(src.resolve())} && "
-            f"zip -r {os.fspath(tgt.resolve())} ./*"
+            f"cd {os.fspath(src.parent)} && "
+            f"tar -cf - {src.name} | "
+            f"lz4 -q - {inter_str} && "
+            f"mv {inter_str} {tgt_str}"
         )
-        logger.debug("Running command: " + cmd)
+
+        if dry_run:
+            logger.debug("DRY RUN: Would run command `%s`", cmd)
+            return rel_path, sp.CompletedProcess([cmd], 0)
+        else:
+            logger.debug("Running command `%s`", cmd)
+
         result = sp.run(
             cmd,
-            capture_output=True,
             shell=True,
+            # stdout=sp.PIPE,
+            stderr=sp.PIPE,
+            encoding="utf-8",
         )
         return rel_path, result
 
 
-def run(src_dir: Path, tgt_dir: Path, dirs, count=False, jobs=None, dryrun=False):
+def run(src_dir: Path, tgt_dir: Path, dirs, no_count=False, jobs=None, dryrun=False):
     futs = []
     zipper = ZipProcessor(Path(src_dir), Path(tgt_dir))
     failures = []
     n_tasks = 0
     with ThreadPoolExecutor(jobs) as exe:
-        for line in tqdm(lines(dirs, count), desc="Queuing jobs"):
+        for line in tqdm(lines(dirs, not no_count), desc="Queuing jobs"):
             s = line.strip().lstrip("/")
             if not s:
                 logger.warning("Null line: %s", line)
@@ -149,19 +183,22 @@ def run(src_dir: Path, tgt_dir: Path, dirs, count=False, jobs=None, dryrun=False
                 stderr = textwrap.indent(r.stderr, " " * 4)
                 logger.warning("Zip FAILED for %s\n%s", rel_path, stderr)
                 failures.append(rel_path)
-
+    log = logger.warning if failures else logger.info
+    log("%s of %s jobs failed", len(failures), n_tasks)
     return failures
 
 
 def main():
     args = parse_args()
-    failures = run(args.src_dir, args.tgt_dir, args.dirs, args.count, args.jobs, args.dry_run)
-    if failures:
-        logger.debug("Writing %s failed jobs to %s", len(failures), args.outfile)
-        if not args.dry_run:
-            with writeable(args.outfile) as f:
-                for fail in failures:
-                    print(fail, file=f)
+    run(
+        args.src_dir, args.tgt_dir, args.dirs, args.no_count, args.jobs, args.dry_run
+    )
+    # if failures:
+    #     logger.debug("Writing %s failed jobs to %s", len(failures), args.outfile)
+    #     if not args.dry_run:
+    #         with writeable(args.outfile) as f:
+    #             for fail in failures:
+    #                 print(fail, file=f)
 
 
 if __name__ == "__main__":
