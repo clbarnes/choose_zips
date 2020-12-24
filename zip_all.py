@@ -169,8 +169,7 @@ def run(src_dir: Path, tgt_dir: Path, dirs, no_count=False, jobs=None, dryrun=Fa
 
             p = Path(s)
             n_tasks += 1
-            if not dryrun:
-                futs.append(exe.submit(zipper, p))
+            futs.append(exe.submit(zipper, p, dryrun))
 
         logger.debug("Queued %s jobs", n_tasks)
 
